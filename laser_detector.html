@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laser Dot Tracker</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 10px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #121212;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { font-size: 1.2rem; margin: 5px 0; }
+        #container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 4/3;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #333;
+        }
+        video, canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        #overlay { z-index: 10; pointer-events: none; }
+        .controls {
+            width: 100%;
+            max-width: 500px;
+            margin-top: 10px;
+            background: #222;
+            padding: 10px;
+            border-radius: 8px;
+            box-sizing: border-box;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        label { font-size: 0.8rem; margin-bottom: 3px; color: #aaa; }
+        select, input[type="range"], button {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 6px;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            grid-column: span 2;
+            font-weight: bold;
+            background: #007bff;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+        button:active { background: #0056b3; }
+        #log {
+            width: 100%;
+            max-width: 500px;
+            height: 80px;
+            margin-top: 10px;
+            background: #000;
+            font-family: monospace;
+            font-size: 0.8rem;
+            padding: 5px;
+            overflow-y: scroll;
+            border-radius: 4px;
+            border: 1px solid #333;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Laser Target Detector</h1>
+    
+    <div id="container">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>Target Bounds</label>
+            <select id="targetShape">
+                <option value="none">Full Screen</option>
+                <option value="uspsa">USPSA Target</option>
+                <option value="square">Square Target</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Target Size</label>
+            <input type="range" id="targetScale" min="50" max="400" value="150">
+        </div>
+        <div class="control-group">
+            <label>Laser Color</label>
+            <select id="laserColor">
+                <option value="red">Red</option>
+                <option value="green">Green</option>
+                <option value="any">Any Bright</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>Sensitivity & Cooldown</label>
+            <input type="range" id="threshold" min="50" max="255" value="200" title="Sensitivity">
+            <input type="range" id="cooldown" min="1" max="10" value="3" title="Cooldown (Seconds)" style="margin-top: 5px;">
+        </div>
+        <button id="clearBtn">Clear Recorded Hits</button>
+    </div>
+
+    <div id="log">System initialized. Waiting for camera...</div>
+
+    <script>
+        const video = document.getElementById('video');
+        const overlay = document.getElementById('overlay');
+        const ctx = overlay.getContext('2d');
+        const logDiv = document.getElementById('log');
+        
+        // Controls
+        const targetShapeSelect = document.getElementById('targetShape');
+        const targetScaleSlider = document.getElementById('targetScale');
+        const laserColorSelect = document.getElementById('laserColor');
+        const thresholdSlider = document.getElementById('threshold');
+        const cooldownSlider = document.getElementById('cooldown');
+        const clearBtn = document.getElementById('clearBtn');
+
+        let processingCanvas = document.createElement('canvas');
+        let pCtx = processingCanvas.getContext('2d');
+        
+        let recordedHits = [];
+        let cooldownUntil = 0;
+        let currentTargetPath = null;
+
+        function log(message) {
+            logDiv.innerHTML += `<div>${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+                    audio: false
+                });
+                video.srcObject = stream;
+                log("Camera connected successfully.");
+            } catch (err) {
+                log("Error accessing camera: " + err.message);
+            }
+        }
+
+        video.addEventListener('loadedmetadata', () => {
+            overlay.width = video.videoWidth;
+            overlay.height = video.videoHeight;
+            processingCanvas.width = video.videoWidth;
+            processingCanvas.height = video.videoHeight;
+            requestAnimationFrame(processFrame);
+        });
+
+        // Generates the Target Outline Path (Outer Boundary)
+        function getTargetPath(shape, cx, cy, scale) {
+            const p = new Path2D();
+            if (shape === 'square') {
+                p.rect(cx - scale, cy - scale, scale * 2, scale * 2);
+            } else if (shape === 'uspsa') {
+                const w = scale;
+                const h = scale * 1.6;
+                // Outer D-Zone Boundary
+                p.moveTo(cx - 0.18*w, cy - 0.5*h); // Head top left
+                p.lineTo(cx + 0.18*w, cy - 0.5*h); // Head top right
+                p.lineTo(cx + 0.18*w, cy - 0.2*h);  // Neck right
+                p.lineTo(cx + 0.45*w, cy - 0.1*h);  // Shoulder right
+                p.lineTo(cx + 0.45*w, cy + 0.5*h);  // Bottom right
+                p.lineTo(cx - 0.45*w, cy + 0.5*h);  // Bottom left
+                p.lineTo(cx - 0.45*w, cy - 0.1*h);  // Shoulder left
+                p.lineTo(cx - 0.18*w, cy - 0.2*h);  // Neck left
+                p.closePath();
+            }
+            return p;
+        }
+
+        // Draws decorative inner target lines (A/B/C zones) to help the user align the camera
+        function drawTargetDetails(shape, cx, cy, scale) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+
+            if (shape === 'square') {
+                // Draw a simple crosshair in the square
+                ctx.beginPath();
+                ctx.moveTo(cx, cy - scale); ctx.lineTo(cx, cy + scale);
+                ctx.moveTo(cx - scale, cy); ctx.lineTo(cx + scale, cy);
+                ctx.stroke();
+            } else if (shape === 'uspsa') {
+                const w = scale;
+                const h = scale * 1.6;
+                
+                // C-Zone Outline
+                ctx.beginPath();
+                ctx.moveTo(cx - 0.12*w, cy - 0.45*h); 
+                ctx.lineTo(cx + 0.12*w, cy - 0.45*h); 
+                ctx.lineTo(cx + 0.12*w, cy - 0.2*h);  
+                ctx.lineTo(cx + 0.35*w, cy - 0.05*h); 
+                ctx.lineTo(cx + 0.35*w, cy + 0.45*h); 
+                ctx.lineTo(cx - 0.35*w, cy + 0.45*h); 
+                ctx.lineTo(cx - 0.35*w, cy - 0.05*h); 
+                ctx.lineTo(cx - 0.12*w, cy - 0.2*h);  
+                ctx.closePath();
+                ctx.stroke();
+
+                // A-Zone Body
+                ctx.beginPath();
+                ctx.rect(cx - 0.18*w, cy - 0.05*h, 0.36*w, 0.45*h);
+                ctx.stroke();
+
+                // A-Zone Head
+                ctx.beginPath();
+                ctx.rect(cx - 0.08*w, cy - 0.42*h, 0.16*w, 0.15*h);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+        }
+
+        function processFrame() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                const now = Date.now();
+                const isDetecting = now > cooldownUntil;
+                
+                const cx = overlay.width / 2;
+                const cy = overlay.height / 2;
+                const shape = targetShapeSelect.value;
+                const scale = parseInt(targetScaleSlider.value);
+
+                // Clear previous overlay frame
+                ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+                // Define Target Area Path
+                currentTargetPath = shape !== 'none' ? getTargetPath(shape, cx, cy, scale) : null;
+
+                // Draw Target Overlay Graphics
+                if (currentTargetPath) {
+                    ctx.strokeStyle = isDetecting ? 'rgba(0, 255, 0, 0.8)' : 'rgba(255, 165, 0, 0.8)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke(currentTargetPath);
+                    drawTargetDetails(shape, cx, cy, scale);
+                }
+
+                if (isDetecting) {
+                    pCtx.drawImage(video, 0, 0, processingCanvas.width, processingCanvas.height);
+                    const imgData = pCtx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
+                    const data = imgData.data;
+
+                    const threshold = parseInt(thresholdSlider.value);
+                    const colorMode = laserColorSelect.value;
+
+                    let highestScore = 0;
+                    let targetX = -1;
+                    let targetY = -1;
+
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+                        let score = 0;
+                        
+                        if (colorMode === 'red' && r > threshold) score = r - (g + b) / 2;
+                        else if (colorMode === 'green' && g > threshold) score = g - (r + b) / 2;
+                        else if (colorMode === 'any') {
+                            const bright = (r + g + b) / 3;
+                            if (bright > threshold) score = bright;
+                        }
+
+                        if (score > highestScore) {
+                            highestScore = score;
+                            const pixelIndex = i / 4;
+                            targetX = pixelIndex % processingCanvas.width;
+                            targetY = Math.floor(pixelIndex / processingCanvas.width);
+                        }
+                    }
+
+                    // Process Hit inside constraints
+                    if (highestScore > 20) { 
+                        // Verify hit is inside target bounds (if a bounds is set)
+                        let isValidHit = true;
+                        if (currentTargetPath) {
+                            isValidHit = ctx.isPointInPath(currentTargetPath, targetX, targetY);
+                        }
+
+                        if (isValidHit) {
+                            const newHit = { x: targetX, y: targetY };
+                            recordedHits.push(newHit);
+                            log(`Hit detected! Paused for ${cooldownSlider.value}s.`);
+                            cooldownUntil = now + (parseInt(cooldownSlider.value) * 1000);
+                            
+                            // Flash crosshair
+                            ctx.strokeStyle = '#00ff00';
+                            ctx.lineWidth = 3;
+                            ctx.beginPath();
+                            ctx.arc(targetX, targetY, 15, 0, 2 * Math.PI);
+                            ctx.stroke();
+                        }
+                    }
+                } else {
+                    const secondsLeft = ((cooldownUntil - now) / 1000).toFixed(1);
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                    ctx.fillRect(cx - 60, cy - 20, 120, 40);
+                    ctx.fillStyle = '#ffaa00';
+                    ctx.font = 'bold 16px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`Paused: ${secondsLeft}s`, cx, cy + 5);
+                    ctx.textAlign = 'left'; // reset
+                }
+
+                // Render cumulative recorded targets
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                recordedHits.forEach(hit => {
+                    ctx.beginPath();
+                    ctx.arc(hit.x, hit.y, 6, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                });
+            }
+            requestAnimationFrame(processFrame);
+        }
+
+        clearBtn.addEventListener('click', () => {
+            recordedHits = [];
+            log("Cleared recorded hits.");
+        });
+
+        window.onload = initCamera;
+    </script>
+</body>
+</html>
