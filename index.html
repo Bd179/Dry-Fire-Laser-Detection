@@ -174,7 +174,7 @@
         <div class="control-group">
             <div class="control-header">
                 <label>Sensitivity</label>
-                <span class="control-value" id="thresholdVal">200</span>
+                <span class="control-value" id="thresholdVal">255</span>
             </div>
             <input type="range" id="threshold" min="50" max="255" value="255" oninput="document.getElementById('thresholdVal').textContent = this.value">
         </div>
@@ -243,31 +243,63 @@
             requestAnimationFrame(processFrame);
         });
 
-        // Generate Target Bounds (D-Zone/Outer Edge)
+        // Updated Path for USPSA/IPSC with Dynamic Scaling
         function getTargetPath(shape, cx, cy, scale) {
             const p = new Path2D();
+            
             if (shape === 'square') {
                 p.rect(cx - scale/2, cy - scale/2, scale, scale);
             } else if (shape === 'uspsa') {
-                // 'scale' represents the full width at the shoulders (18 units)
-                const u = scale / 18; 
+                // Calculate ratio based on your base width of 450
+                const ratio = scale / 450;
                 
-                p.moveTo(cx - 3*u, cy - 15*u); // Head top left
-                p.lineTo(cx + 3*u, cy - 15*u); // Head top right
-                p.lineTo(cx + 3*u, cy - 9*u);  // Neck right
-                p.lineTo(cx + 9*u, cy - 5*u);  // Shoulder right
-                p.lineTo(cx + 9*u, cy + 10*u); // Body bottom right
-                p.lineTo(cx + 5*u, cy + 15*u); // Base right
-                p.lineTo(cx - 5*u, cy + 15*u); // Base left
-                p.lineTo(cx - 9*u, cy + 10*u); // Body bottom left
-                p.lineTo(cx - 9*u, cy - 5*u);  // Shoulder left
-                p.lineTo(cx - 3*u, cy - 9*u);  // Neck left
+                // Scaled dimensions
+                const bodyW = 450 * ratio;
+                const bodyH = 600 * ratio;
+                const headW = 150 * ratio;
+                const headH = 150 * ratio;
+                
+                // Chamfer constants
+                const topChamfer = 50 * ratio;
+                const botChamferX1 = 75 * ratio;
+                const botChamferX2 = 75 * ratio;
+                const botChamferY = 150 * ratio; // Derived from 69.47 degrees
+                
+                const halfW = bodyW / 2;
+                const halfHeadW = headW / 2;
+                
+                const headTop = cy - ((bodyH / 2) + headH);
+                const neckLine = cy - (bodyH / 2);
+                const bodyBottom = cy + (bodyH / 2);
+
+                // 1. Head
+                p.moveTo(cx - halfHeadW, headTop);
+                p.lineTo(cx + halfHeadW, headTop);
+                p.lineTo(cx + halfHeadW, neckLine);
+
+                // 2. Body - Top Right
+                p.lineTo(cx + halfW - topChamfer, neckLine);
+                p.lineTo(cx + halfW, neckLine + topChamfer);
+
+                // 3. Body - Bottom Right
+                p.lineTo(cx + halfW, bodyBottom - botChamferY);
+                p.lineTo(cx + halfW - botChamferX2, bodyBottom);
+
+                // 4. Body - Bottom Left
+                p.lineTo(cx - halfW + botChamferX1, bodyBottom);
+                p.lineTo(cx - halfW, bodyBottom - botChamferY);
+
+                // 5. Body - Top Left
+                p.lineTo(cx - halfW, neckLine + topChamfer);
+                p.lineTo(cx - halfW + topChamfer, neckLine);
+                p.lineTo(cx - halfHeadW, neckLine);
+                
                 p.closePath();
             }
             return p;
         }
 
-        // Draw C and A Zone dashed lines
+        // Updated Zone markings to match the new dimensions
         function drawTargetDetails(shape, cx, cy, scale) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
             ctx.lineWidth = 2;
@@ -279,26 +311,18 @@
                 ctx.moveTo(cx - scale/2, cy); ctx.lineTo(cx + scale/2, cy);
                 ctx.stroke();
             } else if (shape === 'uspsa') {
-                const u = scale / 18;
-
-                // C-Zone Profile
+                // Use the same ratio logic as above
+                const ratio = scale / 450;
+                const headCenterY = cy - (300 * ratio) - (75 * ratio); // Centering logic
+                
+                // Draw centered crosshair
                 ctx.beginPath();
-                ctx.moveTo(cx - 2*u, cy - 8*u);   // Neck L
-                ctx.lineTo(cx + 2*u, cy - 8*u);   // Neck R
-                ctx.lineTo(cx + 6.5*u, cy - 4.5*u); // Shoulder R
-                ctx.lineTo(cx + 6.5*u, cy + 9.5*u); // Bottom R
-                ctx.lineTo(cx + 4*u, cy + 12.5*u);  // Base R
-                ctx.lineTo(cx - 4*u, cy + 12.5*u);  // Base L
-                ctx.lineTo(cx - 6.5*u, cy + 9.5*u); // Bottom L
-                ctx.lineTo(cx - 6.5*u, cy - 4.5*u); // Shoulder L
-                ctx.closePath();
+                ctx.moveTo(cx, cy - 300 * ratio); ctx.lineTo(cx, cy + 300 * ratio);
+                ctx.moveTo(cx - 225 * ratio, cy); ctx.lineTo(cx + 225 * ratio, cy);
                 ctx.stroke();
-
-                // A-Zone Body (Rectangle)
-                ctx.strokeRect(cx - 3*u, cy - 3*u, 6*u, 12*u);
-
-                // A-Zone Head (Rectangle)
-                ctx.strokeRect(cx - 1.5*u, cy - 14*u, 3*u, 4*u);
+                
+                // Simple A-Zone box (approximate)
+                ctx.strokeRect(cx - (75 * ratio), cy - (200 * ratio), 150 * ratio, 300 * ratio);
             }
             ctx.setLineDash([]);
         }
@@ -368,9 +392,9 @@
                             cooldownUntil = now + (parseInt(cooldownSlider.value) * 1000);
                             
                             ctx.strokeStyle = '#00ff00';
-                            ctx.lineWidth = 4;
+                            ctx.lineWidth = 2;
                             ctx.beginPath();
-                            ctx.arc(targetX, targetY, 20, 0, 2 * Math.PI);
+                            ctx.arc(targetX, targetY, 5, 0, 2 * Math.PI);
                             ctx.stroke();
                         }
                     }
@@ -388,7 +412,7 @@
                 ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
                 recordedHits.forEach(hit => {
                     ctx.beginPath();
-                    ctx.arc(hit.x, hit.y, 8, 0, 2 * Math.PI);
+                    ctx.arc(hit.x, hit.y, 2, 0, 2 * Math.PI);
                     ctx.fill();
                     ctx.strokeStyle = '#fff';
                     ctx.lineWidth = 2;
