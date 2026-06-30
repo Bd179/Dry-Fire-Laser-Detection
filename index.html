@@ -38,32 +38,36 @@
             top: 15px;
             right: 15px;
             z-index: 50;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.75);
             color: white;
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            border-radius: 8px;
-            padding: 15px 20px;
-            font-size: 1.4rem;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            padding: 18px 24px;
+            font-size: 1.5rem;
+            font-weight: bold;
             cursor: pointer;
             backdrop-filter: blur(5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
         #sidebar {
             position: fixed;
             top: 0;
-            right: -380px; /* Hidden off-screen */
-            width: 350px;  /* Wider sidebar */
+            right: -100%; /* Uses percentages to fluidly stay off-screen regardless of device width */
+            width: 85vw;   /* Responsive sizing perfect for mobile portrait viewports */
+            max-width: 420px; /* Restricts scaling out too wide on landscape/tablet devices */
             height: 100vh;
-            background: rgba(20, 20, 20, 0.95);
-            backdrop-filter: blur(10px);
+            background: rgba(15, 15, 15, 0.98); /* Darker, high-opacity backdrop for isolation over live feeds */
+            backdrop-filter: blur(15px);
             z-index: 100;
             transition: right 0.3s ease-in-out;
-            padding: 25px;
+            padding: 30px 24px;
             box-sizing: border-box;
             border-left: 2px solid #333;
             display: flex;
             flex-direction: column;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch; /* Butter-smooth scrolling on iOS Safari */
         }
         #sidebar.open {
             right: 0;
@@ -73,54 +77,61 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 25px;
-            border-bottom: 1px solid #444;
-            padding-bottom: 15px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
         }
-        .sidebar-header h2 { margin: 0; font-size: 1.6rem; }
+        .sidebar-header h2 { margin: 0; font-size: 1.8rem; letter-spacing: 0.5px; }
         
         #closeBtn {
             background: none;
             border: none;
-            color: #aaa;
-            font-size: 2rem;
+            color: #ff4a4a;
+            font-size: 2.4rem; /* Massively enlarged tap target for error-free closing */
             cursor: pointer;
-            padding: 0 10px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        #closeBtn:active { color: #fff; }
+        #closeBtn:active { color: #ff0000; }
 
         .control-group {
             display: flex;
             flex-direction: column;
-            margin-bottom: 25px; /* Increased spacing */
+            margin-bottom: 28px; 
         }
         .control-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
         }
-        .control-header label { font-size: 1.1rem; color: #ccc; font-weight: 500; }
-        .control-value { font-size: 1.1rem; color: #0f0; font-family: monospace; font-weight: bold; }
+        .control-header label { font-size: 1.2rem; color: #e0e0e0; font-weight: 600; }
+        .control-value { font-size: 1.2rem; color: #0f0; font-family: monospace; font-weight: bold; }
         
-        select, button.action-btn {
-            background: #333;
+        select {
+            background: #252525;
             color: #fff;
-            border: 1px solid #555;
-            padding: 15px; /* Larger touch targets */
-            border-radius: 8px;
+            border: 2px solid #444;
+            padding: 18px; /* Extra spacing inside standard touch containers */
+            border-radius: 10px;
             width: 100%;
             box-sizing: border-box;
-            font-size: 1.2rem;
+            font-size: 1.3rem; /* Readability bump */
             cursor: pointer;
+            outline: none;
+        }
+        select:focus {
+            border-color: #007bff;
         }
         
-        /* Custom styling for Sliders to make them easy to grab */
+        /* Optimized Slide Rails & Large Ergonomic Gripper Caps */
         input[type="range"] {
             -webkit-appearance: none;
             width: 100%;
             background: transparent;
-            margin: 10px 0;
+            margin: 15px 0;
         }
         input[type="range"]:focus {
             outline: none;
@@ -129,56 +140,65 @@
             width: 100%;
             height: 12px;
             cursor: pointer;
-            background: #444;
+            background: #333;
             border-radius: 6px;
             border: 1px solid #222;
         }
         input[type="range"]::-webkit-slider-thumb {
-            height: 28px;
-            width: 28px;
+            height: 36px; /* Scaled up aggressively from 28px for absolute tracking comfort */
+            width: 36px;
             border-radius: 50%;
             background: #007bff;
             cursor: pointer;
             -webkit-appearance: none;
-            margin-top: -9px; /* Centers the thumb on the track */
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            margin-top: -12px; /* Re-centers expanded thumb nicely over the 12px rail height */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.6);
         }
         input[type="range"]::-moz-range-track {
             width: 100%;
             height: 12px;
             cursor: pointer;
-            background: #444;
+            background: #333;
             border-radius: 6px;
         }
         input[type="range"]::-moz-range-thumb {
-            height: 28px;
-            width: 28px;
+            height: 36px;
+            width: 36px;
             border-radius: 50%;
             background: #007bff;
             cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.6);
         }
 
         button.action-btn {
             font-weight: bold;
             background: #007bff;
+            color: #fff;
             border: none;
-            padding: 18px;
-            margin-top: 15px;
+            border-radius: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            cursor: pointer;
+            font-size: 1.3rem;
+            padding: 22px; /* Fat structural base padding for tactile mobile engagement */
+            margin-top: 20px;
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
         }
         button.action-btn:active { background: #0056b3; }
         
         #log {
             flex-grow: 1;
-            margin-top: 25px;
-            background: #0a0a0a;
+            margin-top: 30px;
+            background: #050505;
             font-family: monospace;
-            font-size: 0.9rem;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #333;
+            font-size: 1rem;
+            padding: 18px;
+            border-radius: 10px;
+            border: 1px solid #222;
             overflow-y: auto;
-            color: #0f0;
-            min-height: 120px;
+            color: #00ff66;
+            min-height: 150px;
+            line-height: 1.4;
         }
     </style>
 </head>
@@ -275,7 +295,6 @@
         const cooldownSlider = document.getElementById('cooldown');
         const clearBtn = document.getElementById('clearBtn');
 
-        // USPSA point values per zone, by power factor
         const SCORING = {
             minor: { A: 5, B: 3, C: 3, D: 1 },
             major: { A: 5, B: 4, C: 4, D: 2 }
@@ -289,13 +308,12 @@
         let currentTargetPath = null;
         let currentUspsaZones = null;
 
-        // Trace tracking state variables
         let isTracking = false;
         let currentTrace = [];
         let currentTraceColor = '';
         let recordedTraces = [];
         let lostFrameCount = 0;
-        const MAX_LOST_FRAMES = 4; // Tolerance drop-out window to account for camera shutter flicker
+        const MAX_LOST_FRAMES = 4;
 
         function log(message) {
             logDiv.innerHTML += `> ${message}<br>`;
@@ -304,7 +322,7 @@
 
         function getRandomColor() {
             const hue = Math.floor(Math.random() * 360);
-            return `hsl(${hue}, 100%, 55%)`; // High saturation neon hues
+            return `hsl(${hue}, 100%, 55%)`;
         }
 
         async function initCamera() {
@@ -330,7 +348,6 @@
 
         function getUspsaZones(cx, cy, scale) {
             const ratio = scale / 450;
-
             const bodyW = 450 * ratio;
             const bodyH = 600 * ratio;
             const headW = 150 * ratio;
@@ -364,7 +381,6 @@
             outline.closePath();
 
             const u = scale / 450;
-
             const headA = new Path2D();
             headA.rect(cx - 50 * u, cy - 400 * u, 100 * u, 50 * u);
 
@@ -395,25 +411,20 @@
 
         function getTargetPath(shape, cx, cy, scale) {
             const p = new Path2D();
-            
             if (shape === 'square') {
                 p.rect(cx - scale/2, cy - scale/2, scale, scale);
             } else if (shape === 'uspsa') {
                 const ratio = scale / 450;
-                
                 const bodyW = 450 * ratio;
                 const bodyH = 600 * ratio;
                 const headW = 150 * ratio;
                 const headH = 150 * ratio;
-                
                 const topChamfer = 50 * ratio;
                 const botChamferX1 = 75 * ratio;
                 const botChamferX2 = 75 * ratio;
                 const botChamferY = 150 * ratio; 
-                
                 const halfW = bodyW / 2;
                 const halfHeadW = headW / 2;
-                
                 const headTop = cy - ((bodyH / 2) + headH);
                 const neckLine = cy - (bodyH / 2);
                 const bodyBottom = cy + (bodyH / 2);
@@ -430,7 +441,6 @@
                 p.lineTo(cx - halfW, neckLine + topChamfer);
                 p.lineTo(cx - halfW + topChamfer, neckLine);
                 p.lineTo(cx - halfHeadW, neckLine);
-                
                 p.closePath();
             }
             return p;
@@ -448,11 +458,9 @@
                 ctx.setLineDash([]);
             } else if (shape === 'uspsa') {
                 const u = scale / 450;
-                
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
                 ctx.lineWidth = 2;
                 ctx.setLineDash([4, 4]);
-                
                 ctx.strokeRect(cx - 50*u, cy - 400*u, 100*u, 50*u);
                 
                 ctx.beginPath();
@@ -521,7 +529,6 @@
 
             ctx.textAlign = 'left';
             ctx.textBaseline = 'top';
-
             ctx.font = 'bold 20px monospace';
             ctx.fillStyle = '#0f0';
             ctx.fillText(lines[0], boxX + padX, boxY + 10);
@@ -555,7 +562,6 @@
                     drawTargetDetails(shape, cx, cy, scale);
                 }
 
-                // Process input frames if outside cooldown OR currently locked inside an active trace
                 if (isDetecting || (traceModeEnabled && isTracking)) {
                     pCtx.drawImage(video, 0, 0, processingCanvas.width, processingCanvas.height);
                     const imgData = pCtx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
@@ -603,13 +609,11 @@
                     if (dotFound) {
                         if (traceModeEnabled) {
                             if (!isTracking) {
-                                // Shot starts: Initialize a new continuous path tracking session
                                 isTracking = true;
                                 lostFrameCount = 0;
                                 currentTraceColor = getRandomColor();
                                 currentTrace = [{ x: targetX, y: targetY }];
 
-                                // Anchor initial contact frame point as the uniform impact location
                                 let zone = null;
                                 let points = 1; 
                                 if (shape === 'uspsa' && currentUspsaZones) {
@@ -620,12 +624,10 @@
                                 const scoreNote = zone ? ` [${zone}-zone, +${points}]` : '';
                                 log(`Laser contact! Tracing path started.${scoreNote}`);
                             } else {
-                                // Accumulate running coordinates across continuous visibility
                                 lostFrameCount = 0;
                                 currentTrace.push({ x: targetX, y: targetY });
                             }
                         } else {
-                            // Standard Mode: Record single snapshot impact point directly
                             let zone = null;
                             let points = 1; 
                             if (shape === 'uspsa' && currentUspsaZones) {
@@ -640,11 +642,9 @@
                             cooldownUntil = now + (cooldownSec * 1000);
                         }
                     } else {
-                        // Dot absent on current frame
                         if (traceModeEnabled && isTracking) {
                             lostFrameCount++;
                             if (lostFrameCount >= MAX_LOST_FRAMES) {
-                                // Dot has completely departed: Finalize and save the trace log
                                 recordedTraces.push({ points: currentTrace, color: currentTraceColor });
                                 const cooldownSec = parseFloat(cooldownSlider.value);
                                 log(`Laser gone. Path complete (${currentTrace.length} frames traced). Cooldown active for ${cooldownSec.toFixed(2)}s.`);
@@ -655,7 +655,6 @@
                         }
                     }
                 } else {
-                    // Cooldown countdown loop handler
                     if (isTracking) {
                         if (currentTrace.length > 0) recordedTraces.push({ points: currentTrace, color: currentTraceColor });
                         isTracking = false;
@@ -694,7 +693,6 @@
                     ctx.textAlign = 'left';
                 }
 
-                // Render Completed Saved Historical Paths
                 ctx.lineWidth = 3;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
@@ -709,7 +707,6 @@
                     ctx.stroke();
                 });
 
-                // Render Actively Tracking Live Wobble Path
                 if (traceModeEnabled && isTracking && currentTrace.length > 1) {
                     ctx.strokeStyle = currentTraceColor;
                     ctx.lineWidth = 3;
@@ -721,13 +718,12 @@
                     ctx.stroke();
                 }
 
-                // Render Uniform Impact Positions (Drawn over tracks cleanly)
                 recordedHits.forEach(hit => {
                     ctx.beginPath();
                     ctx.arc(hit.x, hit.y, 3, 0, 2 * Math.PI);
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.9)'; // Uniform bright Red fill for all impacts
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.9)'; 
                     ctx.fill();
-                    ctx.strokeStyle = '#ffffff'; // Consistent clean white border ring
+                    ctx.strokeStyle = '#ffffff'; 
                     ctx.lineWidth = 1.5;
                     ctx.stroke();
                 });
