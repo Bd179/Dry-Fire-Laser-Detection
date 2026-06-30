@@ -228,6 +228,13 @@
             </select>
         </div>
         <div class="control-group">
+            <div class="control-header"><label>Trace Mode</label></div>
+            <select id="traceMode">
+                <option value="off">Off</option>
+                <option value="on">On</option>
+            </select>
+        </div>
+        <div class="control-group">
             <div class="control-header">
                 <label>Sensitivity</label>
                 <span class="control-value" id="thresholdVal">255</span>
@@ -263,6 +270,7 @@
         const targetScaleSlider = document.getElementById('targetScale');
         const powerFactorSelect = document.getElementById('powerFactor');
         const laserColorSelect = document.getElementById('laserColor');
+        const traceModeSelect = document.getElementById('traceMode');
         const thresholdSlider = document.getElementById('threshold');
         const cooldownSlider = document.getElementById('cooldown');
         const clearBtn = document.getElementById('clearBtn');
@@ -281,9 +289,22 @@
         let currentTargetPath = null;
         let currentUspsaZones = null;
 
+        // Trace tracking state variables
+        let isTracking = false;
+        let currentTrace = [];
+        let currentTraceColor = '';
+        let recordedTraces = [];
+        let lostFrameCount = 0;
+        const MAX_LOST_FRAMES = 4; // Tolerance drop-out window to account for camera shutter flicker
+
         function log(message) {
             logDiv.innerHTML += `> ${message}<br>`;
             logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function getRandomColor() {
+            const hue = Math.floor(Math.random() * 360);
+            return `hsl(${hue}, 100%, 55%)`; // High saturation neon hues
         }
 
         async function initCamera() {
@@ -307,9 +328,6 @@
             requestAnimationFrame(processFrame);
         });
 
-        // Builds the full USPSA silhouette outline plus the A/B/C/D scoring
-        // zone Path2D objects, all derived from the same geometry used by
-        // drawTargetDetails() so the scoring bounds always match what's drawn.
         function getUspsaZones(cx, cy, scale) {
             const ratio = scale / 450;
 
@@ -347,17 +365,12 @@
 
             const u = scale / 450;
 
-            // Head A-Zone (4x4 inches) - matches drawTargetDetails() exactly
             const headA = new Path2D();
             headA.rect(cx - 50 * u, cy - 400 * u, 100 * u, 50 * u);
 
-            // Body A-Zone (6x11 inches)
             const bodyA = new Path2D();
             bodyA.rect(cx - 62.5 * u, cy - 250 * u, 125 * u, 275 * u);
 
-            // Body C-Zone boundary, closed into a polygon for hit-testing
-            // (the stroked version in drawTargetDetails leaves the top open
-            // purely for visual style; here we close it across the top edge)
             const cZone = new Path2D();
             cZone.moveTo(cx - 80 * u, cy - 300 * u);
             cZone.lineTo(cx - 140 * u, cy - 250 * u);
@@ -372,14 +385,12 @@
             return { outline, headA, bodyA, cZone, neckLine };
         }
 
-        // Classifies a hit (already confirmed inside the outline) into its
-        // USPSA zone using the bounds returned by getUspsaZones().
         function scoreUspsaHit(x, y, zones) {
             if (ctx.isPointInPath(zones.headA, x, y)) return 'A';
             if (ctx.isPointInPath(zones.bodyA, x, y)) return 'A';
-            if (y < zones.neckLine) return 'B'; // rest of the head silhouette
+            if (y < zones.neckLine) return 'B'; 
             if (ctx.isPointInPath(zones.cZone, x, y)) return 'C';
-            return 'D'; // inside outline, outside C-zone => body D
+            return 'D'; 
         }
 
         function getTargetPath(shape, cx, cy, scale) {
@@ -442,44 +453,37 @@
                 ctx.lineWidth = 2;
                 ctx.setLineDash([4, 4]);
                 
-                // Head A-Zone (4x4 inches)
                 ctx.strokeRect(cx - 50*u, cy - 400*u, 100*u, 50*u);
                 
-                // Body C-Zone Boundary
                 ctx.beginPath();
-                ctx.moveTo(cx - 80*u, cy - 300*u); //   
-                ctx.lineTo(cx - 140*u, cy - 250*u);//   /
-                ctx.lineTo(cx - 140*u, cy + 25*u);//    |
-                ctx.lineTo(cx - 75*u, cy + 150*u);//     \
-                ctx.lineTo(cx + 75*u, cy + 150*u);//      _
-                ctx.lineTo(cx + 140*u, cy + 25*u);//       /
-                ctx.lineTo(cx + 140*u, cy - 250*u);//       |
-                ctx.lineTo(cx + 80*u, cy - 300*u);//        \ 
+                ctx.moveTo(cx - 80*u, cy - 300*u);   
+                ctx.lineTo(cx - 140*u, cy - 250*u);
+                ctx.lineTo(cx - 140*u, cy + 25*u);
+                ctx.lineTo(cx - 75*u, cy + 150*u);
+                ctx.lineTo(cx + 75*u, cy + 150*u);
+                ctx.lineTo(cx + 140*u, cy + 25*u);
+                ctx.lineTo(cx + 140*u, cy - 250*u);
+                ctx.lineTo(cx + 80*u, cy - 300*u);
                 ctx.stroke();
                 
-                // Body A-Zone Boundary (6x11 inches)
                 ctx.strokeRect(cx - 62.5*u, cy - 250*u, 125*u, 275*u);
-                
                 ctx.setLineDash([]);
                 
-                // Draw Zone Letters
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
                 ctx.font = `bold ${25 * u}px sans-serif`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 
-                ctx.fillText('A', cx, cy - 372.5*u);        // Head A
-                ctx.fillText('B', cx, cy - 300*u);       // Head B
-                ctx.fillText('A', cx, cy - 100*u);         // Body A
-                ctx.fillText('C', cx - 100*u, cy - 100*u);      // Body C
-                ctx.fillText('C', cx + 100*u, cy - 100*u);      // Body C
-                ctx.fillText('D', cx - 180*u, cy - 100*u);      // Body D
+                ctx.fillText('A', cx, cy - 372.5*u);        
+                ctx.fillText('B', cx, cy - 300*u);       
+                ctx.fillText('A', cx, cy - 100*u);         
+                ctx.fillText('C', cx - 100*u, cy - 100*u);      
+                ctx.fillText('C', cx + 100*u, cy - 100*u);      
+                ctx.fillText('D', cx - 180*u, cy - 100*u);      
                 ctx.fillText('D', cx + 180*u, cy - 100*u);
             }
         }
 
-        // Shared geometry for the scoreboard box, used both to draw it and
-        // to anchor the cooldown popup directly beneath it.
         function getScoreBoxRect(shape) {
             const isUspsa = shape === 'uspsa';
             const lineCount = isUspsa ? 3 : 1;
@@ -490,9 +494,6 @@
             return { x: boxX, y: boxY, width: boxW, height: boxH, padX, titleH, lineH };
         }
 
-        // Renders a running scoreboard in the top-left corner: total USPSA
-        // points plus an A/B/C/D zone breakdown (or just a hit count for
-        // non-USPSA target shapes, since zone scoring doesn't apply there).
         function drawScoreOverlay(shape) {
             const counts = { A: 0, B: 0, C: 0, D: 0 };
             let totalPoints = 0;
@@ -532,10 +533,10 @@
             }
         }
 
-
         function processFrame() {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 const now = Date.now();
+                const traceModeEnabled = traceModeSelect.value === 'on';
                 const isDetecting = now > cooldownUntil;
                 
                 const cx = overlay.width / 2;
@@ -548,13 +549,14 @@
                 currentUspsaZones = shape === 'uspsa' ? getUspsaZones(cx, cy, scale) : null;
 
                 if (currentTargetPath) {
-                    ctx.strokeStyle = isDetecting ? 'rgba(0, 255, 0, 0.8)' : 'rgba(255, 165, 0, 0.8)';
+                    ctx.strokeStyle = (isDetecting || (traceModeEnabled && isTracking)) ? 'rgba(0, 255, 0, 0.8)' : 'rgba(255, 165, 0, 0.8)';
                     ctx.lineWidth = 3;
                     ctx.stroke(currentTargetPath);
                     drawTargetDetails(shape, cx, cy, scale);
                 }
 
-                if (isDetecting) {
+                // Process input frames if outside cooldown OR currently locked inside an active trace
+                if (isDetecting || (traceModeEnabled && isTracking)) {
                     pCtx.drawImage(video, 0, 0, processingCanvas.width, processingCanvas.height);
                     const imgData = pCtx.getImageData(0, 0, processingCanvas.width, processingCanvas.height);
                     const data = imgData.data;
@@ -587,15 +589,45 @@
                         }
                     }
 
+                    let dotFound = false;
                     if (highestScore > 20) { 
                         let isValidHit = true;
                         if (currentTargetPath) {
                             isValidHit = ctx.isPointInPath(currentTargetPath, targetX, targetY);
                         }
-
                         if (isValidHit) {
+                            dotFound = true;
+                        }
+                    }
+
+                    if (dotFound) {
+                        if (traceModeEnabled) {
+                            if (!isTracking) {
+                                // Shot starts: Initialize a new continuous path tracking session
+                                isTracking = true;
+                                lostFrameCount = 0;
+                                currentTraceColor = getRandomColor();
+                                currentTrace = [{ x: targetX, y: targetY }];
+
+                                // Anchor initial contact frame point as the uniform impact location
+                                let zone = null;
+                                let points = 1; 
+                                if (shape === 'uspsa' && currentUspsaZones) {
+                                    zone = scoreUspsaHit(targetX, targetY, currentUspsaZones);
+                                    points = SCORING[powerFactorSelect.value][zone];
+                                }
+                                recordedHits.push({ x: targetX, y: targetY, zone, points });
+                                const scoreNote = zone ? ` [${zone}-zone, +${points}]` : '';
+                                log(`Laser contact! Tracing path started.${scoreNote}`);
+                            } else {
+                                // Accumulate running coordinates across continuous visibility
+                                lostFrameCount = 0;
+                                currentTrace.push({ x: targetX, y: targetY });
+                            }
+                        } else {
+                            // Standard Mode: Record single snapshot impact point directly
                             let zone = null;
-                            let points = 1; // generic hit value when no USPSA zones apply
+                            let points = 1; 
                             if (shape === 'uspsa' && currentUspsaZones) {
                                 zone = scoreUspsaHit(targetX, targetY, currentUspsaZones);
                                 points = SCORING[powerFactorSelect.value][zone];
@@ -606,21 +638,36 @@
                             const cooldownSec = parseFloat(cooldownSlider.value);
                             log(`Hit detected!${scoreNote} Paused for ${cooldownSec.toFixed(2)}s.`);
                             cooldownUntil = now + (cooldownSec * 1000);
-                            
-                            ctx.strokeStyle = '#00ff00';
-                            ctx.lineWidth = 2;
-                            ctx.beginPath();
-                            ctx.arc(targetX, targetY, 5, 0, 2 * Math.PI);
-                            ctx.stroke();
+                        }
+                    } else {
+                        // Dot absent on current frame
+                        if (traceModeEnabled && isTracking) {
+                            lostFrameCount++;
+                            if (lostFrameCount >= MAX_LOST_FRAMES) {
+                                // Dot has completely departed: Finalize and save the trace log
+                                recordedTraces.push({ points: currentTrace, color: currentTraceColor });
+                                const cooldownSec = parseFloat(cooldownSlider.value);
+                                log(`Laser gone. Path complete (${currentTrace.length} frames traced). Cooldown active for ${cooldownSec.toFixed(2)}s.`);
+                                cooldownUntil = now + (cooldownSec * 1000);
+                                isTracking = false;
+                                currentTrace = [];
+                            }
                         }
                     }
                 } else {
+                    // Cooldown countdown loop handler
+                    if (isTracking) {
+                        if (currentTrace.length > 0) recordedTraces.push({ points: currentTrace, color: currentTraceColor });
+                        isTracking = false;
+                        currentTrace = [];
+                    }
+
                     const secondsLeft = Math.max(0, (cooldownUntil - now) / 1000).toFixed(3);
 
                     if (shape !== 'none') {
                         const scoreRect = getScoreBoxRect(shape);
                         const px = scoreRect.x;
-                        const py = scoreRect.y + scoreRect.height + 10; // sits just under the scoreboard
+                        const py = scoreRect.y + scoreRect.height + 10; 
                         const pw = scoreRect.width;
                         const ph = 44;
 
@@ -647,13 +694,41 @@
                     ctx.textAlign = 'left';
                 }
 
-                ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                // Render Completed Saved Historical Paths
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                recordedTraces.forEach(trace => {
+                    if (trace.points.length < 2) return;
+                    ctx.strokeStyle = trace.color;
+                    ctx.beginPath();
+                    ctx.moveTo(trace.points[0].x, trace.points[0].y);
+                    for (let i = 1; i < trace.points.length; i++) {
+                        ctx.lineTo(trace.points[i].x, trace.points[i].y);
+                    }
+                    ctx.stroke();
+                });
+
+                // Render Actively Tracking Live Wobble Path
+                if (traceModeEnabled && isTracking && currentTrace.length > 1) {
+                    ctx.strokeStyle = currentTraceColor;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(currentTrace[0].x, currentTrace[0].y);
+                    for (let i = 1; i < currentTrace.length; i++) {
+                        ctx.lineTo(currentTrace[i].x, currentTrace[i].y);
+                    }
+                    ctx.stroke();
+                }
+
+                // Render Uniform Impact Positions (Drawn over tracks cleanly)
                 recordedHits.forEach(hit => {
                     ctx.beginPath();
-                    ctx.arc(hit.x, hit.y, 2, 0, 2 * Math.PI);
+                    ctx.arc(hit.x, hit.y, 3, 0, 2 * Math.PI);
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.9)'; // Uniform bright Red fill for all impacts
                     ctx.fill();
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#ffffff'; // Consistent clean white border ring
+                    ctx.lineWidth = 1.5;
                     ctx.stroke();
                 });
 
@@ -666,7 +741,10 @@
 
         clearBtn.addEventListener('click', () => {
             recordedHits = [];
-            log("Cleared recorded hits.");
+            recordedTraces = [];
+            isTracking = false;
+            currentTrace = [];
+            log("Cleared recorded hits and traces.");
         });
 
         window.onload = initCamera;
