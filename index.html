@@ -11,10 +11,9 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background: #000;
             color: #fff;
-            overflow: hidden; /* Prevent scrolling */
+            overflow: hidden;
         }
         
-        /* Full Screen Camera Container */
         #container {
             position: absolute;
             top: 0;
@@ -34,7 +33,6 @@
         }
         #overlay { z-index: 10; pointer-events: none; }
 
-        /* Floating Menu Button */
         #menuBtn {
             position: absolute;
             top: 15px;
@@ -50,11 +48,10 @@
             backdrop-filter: blur(5px);
         }
 
-        /* Slide-out Sidebar */
         #sidebar {
             position: fixed;
             top: 0;
-            right: -320px; /* Hidden off-screen by default */
+            right: -320px;
             width: 280px;
             height: 100vh;
             background: rgba(20, 20, 20, 0.95);
@@ -72,7 +69,6 @@
             right: 0;
         }
 
-        /* Sidebar Internals */
         .sidebar-header {
             display: flex;
             justify-content: space-between;
@@ -81,10 +77,7 @@
             border-bottom: 1px solid #444;
             padding-bottom: 10px;
         }
-        .sidebar-header h2 {
-            margin: 0;
-            font-size: 1.2rem;
-        }
+        .sidebar-header h2 { margin: 0; font-size: 1.2rem; }
         #closeBtn {
             background: none;
             border: none;
@@ -97,7 +90,14 @@
             flex-direction: column;
             margin-bottom: 15px;
         }
-        label { font-size: 0.85rem; margin-bottom: 5px; color: #bbb; }
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .control-header label { font-size: 0.85rem; color: #bbb; }
+        .control-value { font-size: 0.9rem; color: #0f0; font-family: monospace; }
         select, input[type="range"], button.action-btn {
             background: #333;
             color: #fff;
@@ -149,7 +149,7 @@
         </div>
 
         <div class="control-group">
-            <label>Target Bounds</label>
+            <div class="control-header"><label>Target Bounds</label></div>
             <select id="targetShape">
                 <option value="none">Full Screen</option>
                 <option value="uspsa">USPSA Target</option>
@@ -157,11 +157,14 @@
             </select>
         </div>
         <div class="control-group">
-            <label>Target Size</label>
-            <input type="range" id="targetScale" min="50" max="400" value="150">
+            <div class="control-header">
+                <label>Target Size</label>
+                <span class="control-value" id="scaleVal">200</span>
+            </div>
+            <input type="range" id="targetScale" min="50" max="600" value="200" oninput="document.getElementById('scaleVal').textContent = this.value">
         </div>
         <div class="control-group">
-            <label>Laser Color</label>
+            <div class="control-header"><label>Laser Color</label></div>
             <select id="laserColor">
                 <option value="red">Red</option>
                 <option value="green">Green</option>
@@ -169,9 +172,18 @@
             </select>
         </div>
         <div class="control-group">
-            <label>Sensitivity & Cooldown</label>
-            <input type="range" id="threshold" min="50" max="255" value="200" title="Sensitivity">
-            <input type="range" id="cooldown" min="1" max="10" value="3" title="Cooldown (Seconds)" style="margin-top: 10px;">
+            <div class="control-header">
+                <label>Sensitivity</label>
+                <span class="control-value" id="thresholdVal">200</span>
+            </div>
+            <input type="range" id="threshold" min="50" max="255" value="200" oninput="document.getElementById('thresholdVal').textContent = this.value">
+        </div>
+        <div class="control-group">
+            <div class="control-header">
+                <label>Cooldown (s)</label>
+                <span class="control-value" id="cooldownVal">3</span>
+            </div>
+            <input type="range" id="cooldown" min="1" max="10" value="3" oninput="document.getElementById('cooldownVal').textContent = this.value">
         </div>
         <button id="clearBtn" class="action-btn">Clear Recorded Hits</button>
 
@@ -184,7 +196,6 @@
         const ctx = overlay.getContext('2d');
         const logDiv = document.getElementById('log');
         
-        // Sidebar UI Logic
         const menuBtn = document.getElementById('menuBtn');
         const closeBtn = document.getElementById('closeBtn');
         const sidebar = document.getElementById('sidebar');
@@ -192,7 +203,6 @@
         menuBtn.addEventListener('click', () => sidebar.classList.add('open'));
         closeBtn.addEventListener('click', () => sidebar.classList.remove('open'));
 
-        // Settings Controls
         const targetShapeSelect = document.getElementById('targetShape');
         const targetScaleSlider = document.getElementById('targetScale');
         const laserColorSelect = document.getElementById('laserColor');
@@ -233,58 +243,62 @@
             requestAnimationFrame(processFrame);
         });
 
-        // Generates the Target Outline Path (Outer Boundary)
+        // Generate Target Bounds (D-Zone/Outer Edge)
         function getTargetPath(shape, cx, cy, scale) {
             const p = new Path2D();
             if (shape === 'square') {
-                p.rect(cx - scale, cy - scale, scale * 2, scale * 2);
+                p.rect(cx - scale/2, cy - scale/2, scale, scale);
             } else if (shape === 'uspsa') {
-                const w = scale;
-                const h = scale * 1.6;
-                p.moveTo(cx - 0.18*w, cy - 0.5*h); 
-                p.lineTo(cx + 0.18*w, cy - 0.5*h); 
-                p.lineTo(cx + 0.18*w, cy - 0.2*h);  
-                p.lineTo(cx + 0.45*w, cy - 0.1*h);  
-                p.lineTo(cx + 0.45*w, cy + 0.5*h);  
-                p.lineTo(cx - 0.45*w, cy + 0.5*h);  
-                p.lineTo(cx - 0.45*w, cy - 0.1*h);  
-                p.lineTo(cx - 0.18*w, cy - 0.2*h);  
+                // 'scale' represents the full width at the shoulders (18 units)
+                const u = scale / 18; 
+                
+                p.moveTo(cx - 3*u, cy - 15*u); // Head top left
+                p.lineTo(cx + 3*u, cy - 15*u); // Head top right
+                p.lineTo(cx + 3*u, cy - 9*u);  // Neck right
+                p.lineTo(cx + 9*u, cy - 5*u);  // Shoulder right
+                p.lineTo(cx + 9*u, cy + 10*u); // Body bottom right
+                p.lineTo(cx + 5*u, cy + 15*u); // Base right
+                p.lineTo(cx - 5*u, cy + 15*u); // Base left
+                p.lineTo(cx - 9*u, cy + 10*u); // Body bottom left
+                p.lineTo(cx - 9*u, cy - 5*u);  // Shoulder left
+                p.lineTo(cx - 3*u, cy - 9*u);  // Neck left
                 p.closePath();
             }
             return p;
         }
 
-        // Draws decorative inner target lines
+        // Draw C and A Zone dashed lines
         function drawTargetDetails(shape, cx, cy, scale) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 2;
             ctx.setLineDash([5, 5]);
 
             if (shape === 'square') {
                 ctx.beginPath();
-                ctx.moveTo(cx, cy - scale); ctx.lineTo(cx, cy + scale);
-                ctx.moveTo(cx - scale, cy); ctx.lineTo(cx + scale, cy);
+                ctx.moveTo(cx, cy - scale/2); ctx.lineTo(cx, cy + scale/2);
+                ctx.moveTo(cx - scale/2, cy); ctx.lineTo(cx + scale/2, cy);
                 ctx.stroke();
             } else if (shape === 'uspsa') {
-                const w = scale;
-                const h = scale * 1.6;
-                
-                // C-Zone Outline
+                const u = scale / 18;
+
+                // C-Zone Profile
                 ctx.beginPath();
-                ctx.moveTo(cx - 0.12*w, cy - 0.45*h); 
-                ctx.lineTo(cx + 0.12*w, cy - 0.45*h); 
-                ctx.lineTo(cx + 0.12*w, cy - 0.2*h);  
-                ctx.lineTo(cx + 0.35*w, cy - 0.05*h); 
-                ctx.lineTo(cx + 0.35*w, cy + 0.45*h); 
-                ctx.lineTo(cx - 0.35*w, cy + 0.45*h); 
-                ctx.lineTo(cx - 0.35*w, cy - 0.05*h); 
-                ctx.lineTo(cx - 0.12*w, cy - 0.2*h);  
+                ctx.moveTo(cx - 2*u, cy - 8*u);   // Neck L
+                ctx.lineTo(cx + 2*u, cy - 8*u);   // Neck R
+                ctx.lineTo(cx + 6.5*u, cy - 4.5*u); // Shoulder R
+                ctx.lineTo(cx + 6.5*u, cy + 9.5*u); // Bottom R
+                ctx.lineTo(cx + 4*u, cy + 12.5*u);  // Base R
+                ctx.lineTo(cx - 4*u, cy + 12.5*u);  // Base L
+                ctx.lineTo(cx - 6.5*u, cy + 9.5*u); // Bottom L
+                ctx.lineTo(cx - 6.5*u, cy - 4.5*u); // Shoulder L
                 ctx.closePath();
                 ctx.stroke();
 
-                // A-Zone Body & Head
-                ctx.strokeRect(cx - 0.18*w, cy - 0.05*h, 0.36*w, 0.45*h);
-                ctx.strokeRect(cx - 0.08*w, cy - 0.42*h, 0.16*w, 0.15*h);
+                // A-Zone Body (Rectangle)
+                ctx.strokeRect(cx - 3*u, cy - 3*u, 6*u, 12*u);
+
+                // A-Zone Head (Rectangle)
+                ctx.strokeRect(cx - 1.5*u, cy - 14*u, 3*u, 4*u);
             }
             ctx.setLineDash([]);
         }
