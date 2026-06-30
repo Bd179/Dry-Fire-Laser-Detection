@@ -2,29 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Laser Dot Tracker</title>
     <style>
         body {
             margin: 0;
-            padding: 10px;
+            padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #121212;
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        h1 { font-size: 1.2rem; margin: 5px 0; }
-        #container {
-            position: relative;
-            width: 100%;
-            max-width: 500px;
-            aspect-ratio: 4/3;
             background: #000;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid #333;
+            color: #fff;
+            overflow: hidden; /* Prevent scrolling */
+        }
+        
+        /* Full Screen Camera Container */
+        #container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            z-index: 1;
         }
         video, canvas {
             position: absolute;
@@ -35,68 +33,121 @@
             object-fit: contain;
         }
         #overlay { z-index: 10; pointer-events: none; }
-        .controls {
-            width: 100%;
-            max-width: 500px;
-            margin-top: 10px;
-            background: #222;
-            padding: 10px;
+
+        /* Floating Menu Button */
+        #menuBtn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 50;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.4);
             border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+        }
+
+        /* Slide-out Sidebar */
+        #sidebar {
+            position: fixed;
+            top: 0;
+            right: -320px; /* Hidden off-screen by default */
+            width: 280px;
+            height: 100vh;
+            background: rgba(20, 20, 20, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            transition: right 0.3s ease-in-out;
+            padding: 20px;
             box-sizing: border-box;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            border-left: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        #sidebar.open {
+            right: 0;
+        }
+
+        /* Sidebar Internals */
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+        .sidebar-header h2 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+        #closeBtn {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 1.5rem;
+            cursor: pointer;
         }
         .control-group {
             display: flex;
             flex-direction: column;
+            margin-bottom: 15px;
         }
-        label { font-size: 0.8rem; margin-bottom: 3px; color: #aaa; }
-        select, input[type="range"], button {
+        label { font-size: 0.85rem; margin-bottom: 5px; color: #bbb; }
+        select, input[type="range"], button.action-btn {
             background: #333;
             color: #fff;
             border: 1px solid #555;
-            padding: 6px;
-            border-radius: 4px;
+            padding: 8px;
+            border-radius: 6px;
             width: 100%;
             box-sizing: border-box;
+            font-size: 1rem;
         }
-        button {
-            grid-column: span 2;
+        button.action-btn {
             font-weight: bold;
             background: #007bff;
             border: none;
-            padding: 10px;
+            padding: 12px;
             cursor: pointer;
-            margin-top: 5px;
-        }
-        button:active { background: #0056b3; }
-        #log {
-            width: 100%;
-            max-width: 500px;
-            height: 80px;
             margin-top: 10px;
-            background: #000;
+        }
+        button.action-btn:active { background: #0056b3; }
+        
+        #log {
+            flex-grow: 1;
+            margin-top: 15px;
+            background: #0a0a0a;
             font-family: monospace;
-            font-size: 0.8rem;
-            padding: 5px;
-            overflow-y: scroll;
-            border-radius: 4px;
+            font-size: 0.75rem;
+            padding: 10px;
+            border-radius: 6px;
             border: 1px solid #333;
-            box-sizing: border-box;
+            overflow-y: scroll;
+            color: #0f0;
+            min-height: 100px;
         }
     </style>
 </head>
 <body>
 
-    <h1>Laser Target Detector</h1>
-    
     <div id="container">
         <video id="video" autoplay playsinline muted></video>
         <canvas id="overlay"></canvas>
     </div>
 
-    <div class="controls">
+    <button id="menuBtn">⚙️ Settings</button>
+
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <h2>Controls</h2>
+            <button id="closeBtn">✖</button>
+        </div>
+
         <div class="control-group">
             <label>Target Bounds</label>
             <select id="targetShape">
@@ -120,12 +171,12 @@
         <div class="control-group">
             <label>Sensitivity & Cooldown</label>
             <input type="range" id="threshold" min="50" max="255" value="200" title="Sensitivity">
-            <input type="range" id="cooldown" min="1" max="10" value="3" title="Cooldown (Seconds)" style="margin-top: 5px;">
+            <input type="range" id="cooldown" min="1" max="10" value="3" title="Cooldown (Seconds)" style="margin-top: 10px;">
         </div>
-        <button id="clearBtn">Clear Recorded Hits</button>
-    </div>
+        <button id="clearBtn" class="action-btn">Clear Recorded Hits</button>
 
-    <div id="log">System initialized. Waiting for camera...</div>
+        <div id="log">System initialized. Waiting for camera...<br></div>
+    </div>
 
     <script>
         const video = document.getElementById('video');
@@ -133,7 +184,15 @@
         const ctx = overlay.getContext('2d');
         const logDiv = document.getElementById('log');
         
-        // Controls
+        // Sidebar UI Logic
+        const menuBtn = document.getElementById('menuBtn');
+        const closeBtn = document.getElementById('closeBtn');
+        const sidebar = document.getElementById('sidebar');
+
+        menuBtn.addEventListener('click', () => sidebar.classList.add('open'));
+        closeBtn.addEventListener('click', () => sidebar.classList.remove('open'));
+
+        // Settings Controls
         const targetShapeSelect = document.getElementById('targetShape');
         const targetScaleSlider = document.getElementById('targetScale');
         const laserColorSelect = document.getElementById('laserColor');
@@ -149,14 +208,14 @@
         let currentTargetPath = null;
 
         function log(message) {
-            logDiv.innerHTML += `<div>${message}</div>`;
+            logDiv.innerHTML += `> ${message}<br>`;
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
         async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+                    video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
                     audio: false
                 });
                 video.srcObject = stream;
@@ -182,28 +241,26 @@
             } else if (shape === 'uspsa') {
                 const w = scale;
                 const h = scale * 1.6;
-                // Outer D-Zone Boundary
-                p.moveTo(cx - 0.18*w, cy - 0.5*h); // Head top left
-                p.lineTo(cx + 0.18*w, cy - 0.5*h); // Head top right
-                p.lineTo(cx + 0.18*w, cy - 0.2*h);  // Neck right
-                p.lineTo(cx + 0.45*w, cy - 0.1*h);  // Shoulder right
-                p.lineTo(cx + 0.45*w, cy + 0.5*h);  // Bottom right
-                p.lineTo(cx - 0.45*w, cy + 0.5*h);  // Bottom left
-                p.lineTo(cx - 0.45*w, cy - 0.1*h);  // Shoulder left
-                p.lineTo(cx - 0.18*w, cy - 0.2*h);  // Neck left
+                p.moveTo(cx - 0.18*w, cy - 0.5*h); 
+                p.lineTo(cx + 0.18*w, cy - 0.5*h); 
+                p.lineTo(cx + 0.18*w, cy - 0.2*h);  
+                p.lineTo(cx + 0.45*w, cy - 0.1*h);  
+                p.lineTo(cx + 0.45*w, cy + 0.5*h);  
+                p.lineTo(cx - 0.45*w, cy + 0.5*h);  
+                p.lineTo(cx - 0.45*w, cy - 0.1*h);  
+                p.lineTo(cx - 0.18*w, cy - 0.2*h);  
                 p.closePath();
             }
             return p;
         }
 
-        // Draws decorative inner target lines (A/B/C zones) to help the user align the camera
+        // Draws decorative inner target lines
         function drawTargetDetails(shape, cx, cy, scale) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
             ctx.lineWidth = 1;
             ctx.setLineDash([5, 5]);
 
             if (shape === 'square') {
-                // Draw a simple crosshair in the square
                 ctx.beginPath();
                 ctx.moveTo(cx, cy - scale); ctx.lineTo(cx, cy + scale);
                 ctx.moveTo(cx - scale, cy); ctx.lineTo(cx + scale, cy);
@@ -225,15 +282,9 @@
                 ctx.closePath();
                 ctx.stroke();
 
-                // A-Zone Body
-                ctx.beginPath();
-                ctx.rect(cx - 0.18*w, cy - 0.05*h, 0.36*w, 0.45*h);
-                ctx.stroke();
-
-                // A-Zone Head
-                ctx.beginPath();
-                ctx.rect(cx - 0.08*w, cy - 0.42*h, 0.16*w, 0.15*h);
-                ctx.stroke();
+                // A-Zone Body & Head
+                ctx.strokeRect(cx - 0.18*w, cy - 0.05*h, 0.36*w, 0.45*h);
+                ctx.strokeRect(cx - 0.08*w, cy - 0.42*h, 0.16*w, 0.15*h);
             }
             ctx.setLineDash([]);
         }
@@ -248,16 +299,12 @@
                 const shape = targetShapeSelect.value;
                 const scale = parseInt(targetScaleSlider.value);
 
-                // Clear previous overlay frame
                 ctx.clearRect(0, 0, overlay.width, overlay.height);
-
-                // Define Target Area Path
                 currentTargetPath = shape !== 'none' ? getTargetPath(shape, cx, cy, scale) : null;
 
-                // Draw Target Overlay Graphics
                 if (currentTargetPath) {
                     ctx.strokeStyle = isDetecting ? 'rgba(0, 255, 0, 0.8)' : 'rgba(255, 165, 0, 0.8)';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 3;
                     ctx.stroke(currentTargetPath);
                     drawTargetDetails(shape, cx, cy, scale);
                 }
@@ -295,47 +342,42 @@
                         }
                     }
 
-                    // Process Hit inside constraints
                     if (highestScore > 20) { 
-                        // Verify hit is inside target bounds (if a bounds is set)
                         let isValidHit = true;
                         if (currentTargetPath) {
                             isValidHit = ctx.isPointInPath(currentTargetPath, targetX, targetY);
                         }
 
                         if (isValidHit) {
-                            const newHit = { x: targetX, y: targetY };
-                            recordedHits.push(newHit);
+                            recordedHits.push({ x: targetX, y: targetY });
                             log(`Hit detected! Paused for ${cooldownSlider.value}s.`);
                             cooldownUntil = now + (parseInt(cooldownSlider.value) * 1000);
                             
-                            // Flash crosshair
                             ctx.strokeStyle = '#00ff00';
-                            ctx.lineWidth = 3;
+                            ctx.lineWidth = 4;
                             ctx.beginPath();
-                            ctx.arc(targetX, targetY, 15, 0, 2 * Math.PI);
+                            ctx.arc(targetX, targetY, 20, 0, 2 * Math.PI);
                             ctx.stroke();
                         }
                     }
                 } else {
                     const secondsLeft = ((cooldownUntil - now) / 1000).toFixed(1);
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                    ctx.fillRect(cx - 60, cy - 20, 120, 40);
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(cx - 75, cy - 25, 150, 50);
                     ctx.fillStyle = '#ffaa00';
-                    ctx.font = 'bold 16px sans-serif';
+                    ctx.font = 'bold 20px sans-serif';
                     ctx.textAlign = 'center';
-                    ctx.fillText(`Paused: ${secondsLeft}s`, cx, cy + 5);
-                    ctx.textAlign = 'left'; // reset
+                    ctx.fillText(`Paused: ${secondsLeft}s`, cx, cy + 7);
+                    ctx.textAlign = 'left';
                 }
 
-                // Render cumulative recorded targets
                 ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
                 recordedHits.forEach(hit => {
                     ctx.beginPath();
-                    ctx.arc(hit.x, hit.y, 6, 0, 2 * Math.PI);
+                    ctx.arc(hit.x, hit.y, 8, 0, 2 * Math.PI);
                     ctx.fill();
                     ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 1.5;
+                    ctx.lineWidth = 2;
                     ctx.stroke();
                 });
             }
