@@ -42,22 +42,46 @@
             color: white;
             border: 2px solid rgba(255, 255, 255, 0.5);
             border-radius: 12px;
-            padding: 18px 24px;
-            font-size: 1.5rem;
+            padding: 15px 20px;
+            font-size: 1.2rem;
             font-weight: bold;
             cursor: pointer;
             backdrop-filter: blur(5px);
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
+        /* New styles for the main view shot timer button */
+        #shotTimerBtn {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            background: #ffc107;
+            color: #000;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 15px;
+            padding: 18px 30px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            transition: transform 0.1s ease, opacity 0.1s ease;
+            white-space: nowrap;
+        }
+        #shotTimerBtn:active { 
+            transform: translateX(-50%) scale(0.95); 
+            opacity: 0.9;
+        }
+
         #sidebar {
             position: fixed;
             top: 0;
-            right: -100%; /* Uses percentages to fluidly stay off-screen regardless of device width */
-            width: 85vw;   /* Responsive sizing perfect for mobile portrait viewports */
-            max-width: 420px; /* Restricts scaling out too wide on landscape/tablet devices */
+            right: -100%;
+            width: 85vw;
+            max-width: 420px;
             height: 100vh;
-            background: rgba(15, 15, 15, 0.98); /* Darker, high-opacity backdrop for isolation over live feeds */
+            background: rgba(15, 15, 15, 0.98);
             backdrop-filter: blur(15px);
             z-index: 100;
             transition: right 0.3s ease-in-out;
@@ -67,7 +91,7 @@
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            -webkit-overflow-scrolling: touch; /* Butter-smooth scrolling on iOS Safari */
+            -webkit-overflow-scrolling: touch;
         }
         #sidebar.open {
             right: 0;
@@ -87,7 +111,7 @@
             background: none;
             border: none;
             color: #ff4a4a;
-            font-size: 2.4rem; /* Massively enlarged tap target for error-free closing */
+            font-size: 2.4rem;
             cursor: pointer;
             padding: 10px;
             display: flex;
@@ -114,11 +138,11 @@
             background: #252525;
             color: #fff;
             border: 2px solid #444;
-            padding: 18px; /* Extra spacing inside standard touch containers */
+            padding: 18px;
             border-radius: 10px;
             width: 100%;
             box-sizing: border-box;
-            font-size: 1.3rem; /* Readability bump */
+            font-size: 1.3rem;
             cursor: pointer;
             outline: none;
         }
@@ -126,7 +150,6 @@
             border-color: #007bff;
         }
         
-        /* Optimized Slide Rails & Large Ergonomic Gripper Caps */
         input[type="range"] {
             -webkit-appearance: none;
             width: 100%;
@@ -145,13 +168,13 @@
             border: 1px solid #222;
         }
         input[type="range"]::-webkit-slider-thumb {
-            height: 36px; /* Scaled up aggressively from 28px for absolute tracking comfort */
+            height: 36px;
             width: 36px;
             border-radius: 50%;
             background: #007bff;
             cursor: pointer;
             -webkit-appearance: none;
-            margin-top: -12px; /* Re-centers expanded thumb nicely over the 12px rail height */
+            margin-top: -12px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.6);
         }
         input[type="range"]::-moz-range-track {
@@ -180,17 +203,15 @@
             box-sizing: border-box;
             cursor: pointer;
             font-size: 1.3rem;
-            padding: 22px; /* Fat structural base padding for tactile mobile engagement */
-            margin-top: 20px;
-            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+            padding: 22px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
-        button.action-btn:active { background: #0056b3; }
+        button.action-btn:active { opacity: 0.8; transform: scale(0.98); }
 
-        
-        
         #log {
             flex-grow: 1;
-            margin-top: 30px;
+            margin-top: 10px;
             background: #050505;
             font-family: monospace;
             font-size: 1rem;
@@ -211,7 +232,9 @@
         <canvas id="overlay"></canvas>
     </div>
 
+    <!-- Main view buttons -->
     <button id="menuBtn">⚙️ Settings</button>
+    <button id="shotTimerBtn">⏱️ Start Timer</button>
 
     <div id="sidebar">
         <div class="sidebar-header">
@@ -219,9 +242,9 @@
             <button id="closeBtn">✖</button>
         </div>
 
-        <button id="toggleBtn" class="action-btn" style="background: #dc3545; margin-bottom: 25px;">Start Detecting</button>
+        <button id="toggleBtn" class="action-btn" style="background: #dc3545;">Start Detecting</button>
 
-        <div class="control-group">
+        <div class="control-group" style="margin-top: 10px;">
             <div class="control-header"><label>Target Shape</label></div>
             <select id="targetShape">
                 <option value="uspsa">USPSA Silhouette</option>
@@ -277,21 +300,82 @@
     </div>
 
     <script>
-
         const toggleBtn = document.getElementById('toggleBtn');
-        let isDetectingActive = false; // Defaults to OFF on load
+        const shotTimerBtn = document.getElementById('shotTimerBtn');
+        let isDetectingActive = false; 
+
+        // Shot Timer Variables
+        let timerState = 'idle'; // 'idle', 'standby', 'running', 'stopped'
+        let timerStartMs = 0;
+        let finalTime = "0.00";
+        let beepContext = null;
+        let timerTimeout1 = null;
+        let timerTimeout2 = null;
 
         toggleBtn.addEventListener('click', () => {
             isDetectingActive = !isDetectingActive;
             if (isDetectingActive) {
                 toggleBtn.textContent = 'Stop Detecting';
-                toggleBtn.style.background = '#28a745'; // Green when active
+                toggleBtn.style.background = '#28a745'; 
                 log("Detection started.");
             } else {
                 toggleBtn.textContent = 'Start Detecting';
-                toggleBtn.style.background = '#dc3545'; // Red when stopped
+                toggleBtn.style.background = '#dc3545'; 
                 log("Detection stopped.");
+                
+                // Cancel timer if running
+                timerState = 'idle';
+                if (timerTimeout1) clearTimeout(timerTimeout1);
+                if (timerTimeout2) clearTimeout(timerTimeout2);
             }
+        });
+
+        // Shot Timer Audio and Logic
+        function playBeep() {
+            if (!beepContext) return;
+            const osc = beepContext.createOscillator();
+            const gain = beepContext.createGain();
+            osc.connect(gain);
+            gain.connect(beepContext.destination);
+            osc.type = 'square'; // Harsh square wave for clear piercing beep
+            osc.frequency.setValueAtTime(3000, beepContext.currentTime); // 3kHz 
+            gain.gain.setValueAtTime(1, beepContext.currentTime);
+            osc.start();
+            osc.stop(beepContext.currentTime + 0.3); // 0.3s beep duration
+        }
+
+        shotTimerBtn.addEventListener('click', () => {
+            // Setup Web Audio on user gesture to bypass browser restrictions
+            if (!beepContext) beepContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (beepContext.state === 'suspended') beepContext.resume();
+
+            // Auto-start detection if it's currently off
+            if (!isDetectingActive) {
+                toggleBtn.click();
+            }
+
+            // Reset current timer state
+            if (timerTimeout1) clearTimeout(timerTimeout1);
+            if (timerTimeout2) clearTimeout(timerTimeout2);
+
+            timerState = 'standby';
+            finalTime = "0.00";
+            log("Shot timer: Standby... (2s pause)");
+
+            // 2-second initial pause
+            timerTimeout1 = setTimeout(() => {
+                const randomDelay = Math.random() * 2000 + 1000; // 1000ms to 3000ms
+                log(`Shot timer: Random delay (${(randomDelay/1000).toFixed(2)}s)`);
+                
+                timerTimeout2 = setTimeout(() => {
+                    playBeep();
+                    timerStartMs = Date.now();
+                    timerState = 'running';
+                    cooldownUntil = 0; // Reset cooldown instantly so first shot always triggers
+                    log("BEEP! Timer started.");
+                }, randomDelay);
+
+            }, 2000);
         });
 
         const video = document.getElementById('video');
@@ -560,6 +644,16 @@
             }
         }
 
+        // Helper to evaluate and stop the timer when a dot is detected
+        function evaluateShotTimerStop() {
+            if (timerState === 'running') {
+                timerState = 'stopped';
+                const elapsed = (Date.now() - timerStartMs) / 1000;
+                finalTime = elapsed.toFixed(2);
+                log(`Shot timer stopped: ${finalTime}s`);
+            }
+        }
+
         function processFrame() {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 const now = Date.now();
@@ -601,7 +695,6 @@
                         let score = 0;
                         
                         if (colorMode === 'red') {
-                            // "Red" now uses pure brightness logic to combat camera overexposure
                             const bright = (r + g + b) / 3;
                             if (bright >= threshold) score = bright;
                         } 
@@ -632,6 +725,8 @@
                     if (dotFound) {
                         if (traceModeEnabled) {
                             if (!isTracking) {
+                                evaluateShotTimerStop(); // Stop timer on first contact
+
                                 isTracking = true;
                                 lostFrameCount = 0;
                                 currentTraceColor = getRandomColor();
@@ -651,6 +746,8 @@
                                 currentTrace.push({ x: targetX, y: targetY });
                             }
                         } else {
+                            evaluateShotTimerStop(); // Stop timer on clean hit
+
                             let zone = null;
                             let points = 1; 
                             if (shape === 'uspsa' && currentUspsaZones) {
@@ -754,6 +851,44 @@
                 if (shape !== 'none') {
                     drawScoreOverlay(shape);
                 }
+
+                // --- Draw Shot Timer ---
+                if (timerState !== 'idle') {
+                    let displayTime = finalTime;
+                    if (timerState === 'standby') {
+                        displayTime = "Standby...";
+                    } else if (timerState === 'running') {
+                        displayTime = ((Date.now() - timerStartMs) / 1000).toFixed(2) + "s";
+                    } else {
+                        displayTime = finalTime + "s";
+                    }
+
+                    const tw = 280;
+                    const th = 70;
+                    const tx = overlay.width / 2 - tw / 2;
+                    const ty = 30;
+
+                    // Box Background
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+                    ctx.fillRect(tx, ty, tw, th);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(tx, ty, tw, th);
+
+                    // Text Color based on state
+                    if (timerState === 'running') ctx.fillStyle = '#ff4a4a'; // Red
+                    else if (timerState === 'stopped') ctx.fillStyle = '#0f0'; // Green
+                    else ctx.fillStyle = '#ffc107'; // Yellow standby
+
+                    ctx.font = 'bold 36px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(displayTime, tx + tw / 2, ty + th / 2);
+                    
+                    // Reset alignment for other draw loops
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'alphabetic';
+                }
             }
             requestAnimationFrame(processFrame);
         }
@@ -763,7 +898,10 @@
             recordedTraces = [];
             isTracking = false;
             currentTrace = [];
-            log("Cleared recorded hits and traces.");
+            timerState = 'idle'; // Reset timer off screen
+            if (timerTimeout1) clearTimeout(timerTimeout1);
+            if (timerTimeout2) clearTimeout(timerTimeout2);
+            log("Cleared recorded hits, traces, and timer.");
         });
 
         window.onload = initCamera;
