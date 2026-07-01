@@ -185,6 +185,8 @@
             box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
         }
         button.action-btn:active { background: #0056b3; }
+
+        
         
         #log {
             flex-grow: 1;
@@ -217,12 +219,14 @@
             <button id="closeBtn">✖</button>
         </div>
 
+        <button id="toggleBtn" class="action-btn" style="background: #dc3545; margin-bottom: 25px;">Start Detecting</button>
+
         <div class="control-group">
-            <div class="control-header"><label>Target Bounds</label></div>
+            <div class="control-header"><label>Target Shape</label></div>
             <select id="targetShape">
-                <option value="none">Full Screen</option>
-                <option value="uspsa">USPSA Target</option>
-                <option value="square">Square Target</option>
+                <option value="uspsa">USPSA Silhouette</option>
+                <option value="square">Square</option>
+                <option value="none">None</option>
             </select>
         </div>
         <div class="control-group">
@@ -244,7 +248,6 @@
             <select id="laserColor">
                 <option value="red">Red</option>
                 <option value="green">Green</option>
-                <option value="any">Any Bright</option>
             </select>
         </div>
         <div class="control-group">
@@ -274,6 +277,23 @@
     </div>
 
     <script>
+
+        const toggleBtn = document.getElementById('toggleBtn');
+        let isDetectingActive = false; // Defaults to OFF on load
+
+        toggleBtn.addEventListener('click', () => {
+            isDetectingActive = !isDetectingActive;
+            if (isDetectingActive) {
+                toggleBtn.textContent = 'Stop Detecting';
+                toggleBtn.style.background = '#28a745'; // Green when active
+                log("Detection started.");
+            } else {
+                toggleBtn.textContent = 'Start Detecting';
+                toggleBtn.style.background = '#dc3545'; // Red when stopped
+                log("Detection stopped.");
+            }
+        });
+
         const video = document.getElementById('video');
         const overlay = document.getElementById('overlay');
         const ctx = overlay.getContext('2d');
@@ -544,7 +564,7 @@
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 const now = Date.now();
                 const traceModeEnabled = traceModeSelect.value === 'on';
-                const isDetecting = now > cooldownUntil;
+                const isDetecting = isDetectingActive && (now > cooldownUntil);
                 
                 const cx = overlay.width / 2;
                 const cy = overlay.height / 2;
@@ -580,11 +600,14 @@
                         const b = data[i + 2];
                         let score = 0;
                         
-                        if (colorMode === 'red' && r > threshold) score = r - (g + b) / 2;
-                        else if (colorMode === 'green' && g > threshold) score = g - (r + b) / 2;
-                        else if (colorMode === 'any') {
+                        if (colorMode === 'red') {
+                            // "Red" now uses pure brightness logic to combat camera overexposure
                             const bright = (r + g + b) / 3;
-                            if (bright > threshold) score = bright;
+                            if (bright >= threshold) score = bright;
+                        } 
+                        else if (colorMode === 'green' && g >= threshold) {
+                            score = (g * 2) - r - b;
+                            if (score <= 20 && g >= 250 && r >= 240 && b >= 240) score = 25;
                         }
 
                         if (score > highestScore) {
